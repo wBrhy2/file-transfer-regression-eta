@@ -119,6 +119,27 @@ sum_nn = sum_nn * decay + n_i * n_i
 
 This weights recent observations more heavily while retaining long-term signal. The decay factor is conservative enough that it doesn't throw away useful history, but responsive enough to adapt within a few minutes if conditions change materially.
 
+### Spanning file redistribution
+
+There's a problem the basic bucketing doesn't handle. When rsync transfers a file large enough to take longer than one bucket width - a 5GB video at 230 MB/s takes about 22 seconds, spanning at least two full buckets - the buckets during that transfer record zero files and zero bytes. The tool only learns about the file when rsync reports it as complete, at which point all the credit lands in a single completion bucket. The result is a run of dead-zone buckets followed by a spike, and both distort the regression.
+
+The fix is to detect these spanning files and redistribute their cost across the time they actually occupied.
+
+For each run of consecutive zero-file buckets, the span is the zero-run plus the completion bucket (the first non-zero bucket that follows). If the run is 3 zeros long, the span is 4 buckets. The algorithm estimates the spanning file's size by looking at the completion bucket's contents: it has N files and B total bytes, but only one of those files is the large one that caused the zero-run. The other N - 1 files are normal-sized, so their contribution can be estimated from the median bytes-per-file of the 10 nearest non-zero buckets on each side (excluding the entire span, since the completion bucket would dilute the estimate with the large file's bytes).
+
+```
+other_bytes = (N - 1) * neighbor_median_bpf
+large_file_bytes = clamp(B - other_bytes, 0, B)
+```
+
+Then redistribute: spread 1 file and `large_file_bytes` evenly across all buckets in the span. Each bucket gets `1 / n_span` files and `large_file_bytes / n_span` bytes. The completion bucket loses 1 file and `large_file_bytes` from its total, then gets back its `1/n_span` share. The remaining N - 1 files and their bytes in the completion bucket stay untouched.
+
+This preserves totals exactly - no files or bytes are created or destroyed, just moved. Every zero bucket is eliminated, and file counts become fractional, which is correct for the regression: a bucket with 0.25 files represents 25% of a file's transfer happening in that time window.
+
+The implementation requires buffering raw buckets rather than feeding them directly into the regression sums. When a non-zero bucket arrives after a zero-run, the span is detected, redistribution is applied, and all corrected buckets are fed into the regression. When a non-zero bucket follows another non-zero bucket (the common case - no spanning file), it feeds through immediately with no delay. A small history of recent non-zero buckets is maintained for the neighbor median calculation.
+
+During a large file transfer (the zero-run), the regression receives no new data - but this is actually better than the alternative, because there is genuinely no new information available until the file completes. The ETA display continues showing the last estimate, which is stable by construction, and updates once the span is redistributed.
+
 ## Empirical validation
 
 Tested on a real-world 20TB migration: 917,765 files transferred from a ZFS pool to ext4 via local HBA, split across two parallel rsyncs writing to separate 14TB drives.

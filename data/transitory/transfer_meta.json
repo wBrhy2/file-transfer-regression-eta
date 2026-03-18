@@ -1,0 +1,31 @@
+{
+  "disk1": {
+    "total_files": 457631,
+    "total_bytes": 10283145856755,
+    "total_bytes_rsync_stats": 10142980081948,
+    "active_seconds": 56995.0,
+    "num_buckets": 5700,
+    "finished": "2026-03-17T15:09:42"
+  },
+  "disk2_to_cutoff": {
+    "total_files": 452829,
+    "total_bytes": 10438047950652,
+    "total_bytes_rsync_stats_full": 10351626304458,
+    "num_buckets": 5702,
+    "cutoff": "2026-03-17T15:09:42"
+  },
+  "combined_at_cutoff": {
+    "total_files": 910460,
+    "total_bytes": 20721193807407
+  },
+  "transfer": {
+    "run1_start": "2026-03-16T22:15:08",
+    "run1_crash": "2026-03-17T08:25:43",
+    "run2_resume": "2026-03-17T09:30:04",
+    "disk1_end": "2026-03-17T15:09:42",
+    "disk2_end": "2026-03-17T17:14:02",
+    "pause_duration_seconds": 3861.0,
+    "pause_squished": true,
+    "bucket_width_seconds": 10.0
+  }
+}
